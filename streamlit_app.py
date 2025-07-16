@@ -1,11 +1,8 @@
 import streamlit as st
 import pandas as pd
-import requests
+import feedparser  # Für RSS-Parsing (pip install feedparser)
 
-st.title("Lead-Generierungs-Dashboard für Industriemontagen")
-
-# Ersetze mit deinem NewsAPI-Key
-API_KEY = "721edb11114a40119016623e7236156d"
+st.title("Lead-Generierungs-Dashboard für Industriemontagen – Mit Google News RSS")
 
 # Optimisiertes Set an Keywords (fokussiert auf trefferträchtige Begriffe)
 default_keywords = [
@@ -17,46 +14,30 @@ default_keywords = [
 # Regionen (fest: Europa/Asien)
 regions = ["Europa", "Asien"]
 
-# Funktion zum Aufteilen der Keywords in Batches und Mergen der Ergebnisse
-def fetch_news_in_batches(query_keywords, selected_regions, batch_size=1):
-    if not API_KEY or API_KEY == "dein_newsapi_key_hier_einfuegen":
-        st.error("Bitte einen gültigen NewsAPI-Key in app.py einfügen!")
-        return pd.DataFrame()
-    
+def fetch_news_from_rss(query_keywords, selected_regions):
     all_leads = []
     debug_info = []  # Für Debugging
     
-    # Keywords in Batches aufteilen (hier einzeln)
-    for i in range(0, len(query_keywords), batch_size):
-        batch_keywords = query_keywords[i:i + batch_size]
-        if not batch_keywords:
-            continue
-        # Für einzelne Keyword: Wenn Leerzeichen, wrap in Quotes für exakte Phrase
-        keyword = batch_keywords[0]
-        if ' ' in keyword:
-            query = f"\"{keyword}\""
-        else:
-            query = keyword
+    for keyword in query_keywords:
+        # RSS-Query bauen (für Englisch/Deutsch, mit Regionen)
+        region_str = " ".join(selected_regions) if selected_regions else ""
+        query = f"{keyword} {region_str} 2025"
+        rss_url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=de-DE&gl=DE&ceid=DE:de"  # Deutsch-fokussiert; für Englisch &hl=en-US&gl=US
         
-        url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
-        response = requests.get(url)
-        if response.status_code != 200:
-            st.error(f"API-Fehler in Batch: {response.text}")
-            continue
+        feed = feedparser.parse(rss_url)
+        num_entries = len(feed.entries)
+        debug_info.append(f"Keyword '{keyword}': {num_entries} Articles gefunden")
         
-        articles = response.json().get('articles', [])
-        debug_info.append(f"Batch '{query}': {len(articles)} Articles gefunden")
-        
-        for article in articles:
-            content = (article.get('title', '') + ' ' + article.get('description', '')).lower()
+        for entry in feed.entries:
+            content = (entry.get('title', '') + ' ' + entry.get('summary', '')).lower()
             matching_regions = [r for r in selected_regions if r.lower() in content]
-            if matching_regions or not selected_regions:  # Filter nur, wenn Regionen ausgewählt
+            if matching_regions or not selected_regions:
                 all_leads.append({
                     'Region': ', '.join(matching_regions) or 'Alle',
-                    'Company': article['source']['name'],
-                    'Event': article['title'],
-                    'Source': article['url'],
-                    'Language': 'Deutsch' if 'de' in article.get('language', 'en') else 'English',
+                    'Company': entry.get('source', {}).get('title', 'Unbekannt'),
+                    'Event': entry.title,
+                    'Source': entry.link,
+                    'Language': 'Deutsch' if 'de' in rss_url else 'English',
                     'Potential Contacts': 'Simuliert: Operations Manager (linkedin.com/in/beispiel); Procurement Director (linkedin.com/in/beispiel2) - Integriere LinkedIn API für echte Kontakte.'
                 })
     
@@ -68,24 +49,17 @@ def fetch_news_in_batches(query_keywords, selected_regions, batch_size=1):
     return df
 
 # User-Inputs
-selected_regions = st.multiselect("Regionen wählen (deaktiviere für breitere Suche)", regions, default=[])
+selected_regions = st.multiselect("Regionen wählen (deaktiviere für breitere Suche)", regions, default=regions)
 custom_keywords = st.text_input("Zusätzliche Keywords (kommagetrennt hinzufügen)", "")
 all_keywords = default_keywords + [k.strip() for k in custom_keywords.split(',') if k.strip()]
 
 if st.button("Leads generieren"):
-    df = fetch_news_in_batches(all_keywords, selected_regions)
+    df = fetch_news_from_rss(all_keywords, selected_regions)
     if not df.empty:
         st.markdown("### Generierte Leads")
         st.dataframe(df, use_container_width=True)
     else:
-        # Fallback: Versuche ohne Regionen
-        st.warning("Keine Leads mit Regionen gefunden. Versuche Fallback ohne Regionen...")
-        fallback_df = fetch_news_in_batches(all_keywords, [])
-        if not fallback_df.empty:
-            st.markdown("### Fallback-Leads (ohne Regionsfilter)")
-            st.dataframe(fallback_df, use_container_width=True)
-        else:
-            st.error("Immer noch keine Leads. Teste manuell: https://newsapi.org/v2/everything?q=factory+relocation&apiKey=DEIN_KEY")
+        st.warning("Keine Leads gefunden. Passe Keywords an oder deaktiviere Regionen.")
 
 # Export-Option
 if 'df' in locals() and not df.empty:
