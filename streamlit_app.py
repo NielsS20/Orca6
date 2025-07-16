@@ -7,8 +7,23 @@ st.title("Lead-Generierungs-Dashboard für Industriemontagen")
 # Ersetze mit deinem NewsAPI-Key (kostenlos bei newsapi.org holen)
 API_KEY = "721edb11114a40119016623e7236156d"
 
-# Standard-Keywords und Regionen (Europa/Asien, Deutsch/Englisch)
-default_keywords = ["Fabrikverlagerung", "factory relocation", "Fabrikerweiterung", "plant expansion", "Maschinenabbau", "machine dismantling"]
+# Erweitertes festes Set an Keywords (auf Deutsch und Englisch, basierend auf Branchenbegriffen)
+default_keywords = [
+    "Fabrikverlagerung", "Anlagenerweiterung", "Maschineninstallation", "Fabrikabbau", 
+    "Industrielle Relokation", "Maschinenmontage", "Anlagenstilllegung", "Fabrikumzug", 
+    "Produktionslinienaufbau", "Maschinenabbau", "Demontage-Dienste", "Maschinenverlagerung",
+    "Schwerlasttransport", "Elektrodemontage", "Mechanische Demontage", "Anlagenverlagerung",
+    "Produktionslinienverlagerung", "Industrielle Anlagen", "Mechanische Wartung", 
+    "Maschinenentfernung", "Schwergutbewegung", "Standortvorbereitung", "Rigging-Dienste",
+    "factory relocation", "plant expansion", "machine installation", "factory dismantling", 
+    "industrial relocation", "machinery assembly", "plant shutdown", "factory move", 
+    "production line setup", "machine dismantling", "decommissioning services", "machine relocation",
+    "machinery moving", "electrical decommissioning", "mechanical decommissioning", "equipment relocation",
+    "production line relocation", "industrial installations", "mechanical maintenance", 
+    "machine removal", "heavy equipment move", "site preparation", "rigging services"
+]
+
+# Regionen (fest: Europa/Asien)
 regions = ["Europa", "Asien"]
 
 def fetch_news(query_keywords, selected_regions):
@@ -16,7 +31,9 @@ def fetch_news(query_keywords, selected_regions):
         st.error("Bitte einen gültigen NewsAPI-Key in app.py einfügen!")
         return pd.DataFrame()
     
-    url = f"https://newsapi.org/v2/everything?q={' OR '.join(query_keywords)}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
+    # Query mit Keywords und Regionen kombinieren
+    query = f"({' OR '.join(query_keywords)}) AND ({' OR '.join(selected_regions)})"
+    url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
     response = requests.get(url)
     if response.status_code != 200:
         st.error(f"API-Fehler: {response.text}")
@@ -40,7 +57,7 @@ def fetch_news(query_keywords, selected_regions):
 
 # User-Inputs
 selected_regions = st.multiselect("Regionen wählen", regions, default=regions)
-custom_keywords = st.text_input("Zusätzliche Keywords (kommagetrennt)", "")
+custom_keywords = st.text_input("Zusätzliche Keywords (kommagetrennt hinzufügen)", "")
 all_keywords = default_keywords + [k.strip() for k in custom_keywords.split(',') if k.strip()]
 
 if st.button("Leads generieren"):
