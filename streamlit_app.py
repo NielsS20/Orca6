@@ -7,20 +7,14 @@ st.title("Lead-Generierungs-Dashboard für Industriemontagen")
 # Ersetze mit deinem NewsAPI-Key
 API_KEY = "721edb11114a40119016623e7236156d"
 
-# Erweitertes festes Set an Keywords
+# Reduziertes festes Set an Keywords (Top 20 für bessere Queries; erweiterbar via Input)
 default_keywords = [
     "Fabrikverlagerung", "Anlagenerweiterung", "Maschineninstallation", "Fabrikabbau", 
-    "Industrielle Relokation", "Maschinenmontage", "Anlagenstilllegung", "Fabrikumzug", 
-    "Produktionslinienaufbau", "Maschinenabbau", "Demontage-Dienste", "Maschinenverlagerung",
-    "Schwerlasttransport", "Elektrodemontage", "Mechanische Demontage", "Anlagenverlagerung",
-    "Produktionslinienverlagerung", "Industrielle Anlagen", "Mechanische Wartung", 
-    "Maschinenentfernung", "Schwergutbewegung", "Standortvorbereitung", "Rigging-Dienste",
+    "Maschinenmontage", "Fabrikumzug", "Maschinenabbau", "Maschinenverlagerung",
+    "Anlagenverlagerung", "Standortvorbereitung",
     "factory relocation", "plant expansion", "machine installation", "factory dismantling", 
-    "industrial relocation", "machinery assembly", "plant shutdown", "factory move", 
-    "production line setup", "machine dismantling", "decommissioning services", "machine relocation",
-    "machinery moving", "electrical decommissioning", "mechanical decommissioning", "equipment relocation",
-    "production line relocation", "industrial installations", "mechanical maintenance", 
-    "machine removal", "heavy equipment move", "site preparation", "rigging services"
+    "machinery assembly", "factory move", "machine dismantling", "machine relocation",
+    "equipment relocation", "site preparation"
 ]
 
 # Regionen (fest: Europa/Asien)
@@ -33,7 +27,7 @@ def fetch_news_in_batches(query_keywords, selected_regions, batch_size=5):
         return pd.DataFrame()
     
     all_leads = []
-    debug_queries = []  # Für Debugging
+    debug_info = []  # Für Debugging
     
     # Keywords in Batches aufteilen
     for i in range(0, len(query_keywords), batch_size):
@@ -42,23 +36,23 @@ def fetch_news_in_batches(query_keywords, selected_regions, batch_size=5):
             continue
         query = f"({' OR '.join(batch_keywords)})"
         
-        # Query-Länge prüfen
         if len(query) > 500:
             st.warning(f"Batch-Query zu lang ({len(query)} Zeichen) – überspringe Batch.")
             continue
         
-        url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
-        debug_queries.append(query)  # Speichere für Ausgabe
+        url = f"https://newsapi.org/v2/everything?q={query}&from=2024-01-01&to=2025-12-31&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
         response = requests.get(url)
         if response.status_code != 200:
             st.error(f"API-Fehler in Batch: {response.text}")
             continue
         
         articles = response.json().get('articles', [])
+        debug_info.append(f"Batch '{query}': {len(articles)} Articles gefunden")
+        
         for article in articles:
             content = (article.get('title', '') + ' ' + article.get('description', '')).lower()
             matching_regions = [r for r in selected_regions if r.lower() in content]
-            if matching_regions or not selected_regions:  # Nur filtern, wenn Regionen ausgewählt
+            if matching_regions or not selected_regions:  # Filter nur, wenn Regionen ausgewählt
                 all_leads.append({
                     'Region': ', '.join(matching_regions) or 'Alle',
                     'Company': article['source']['name'],
@@ -72,11 +66,11 @@ def fetch_news_in_batches(query_keywords, selected_regions, batch_size=5):
     df = pd.DataFrame(all_leads).drop_duplicates(subset=['Source'])
     
     # Debugging-Ausgabe
-    st.info(f"Verwendete Queries (pro Batch): {'; '.join(debug_queries)}")
+    st.info("Debug-Info: " + "; ".join(debug_info))
     return df
 
 # User-Inputs
-selected_regions = st.multiselect("Regionen wählen (deaktiviere für breitere Suche)", regions, default=regions)
+selected_regions = st.multiselect("Regionen wählen (deaktiviere für breitere Suche)", regions, default=[])
 custom_keywords = st.text_input("Zusätzliche Keywords (kommagetrennt hinzufügen)", "")
 all_keywords = default_keywords + [k.strip() for k in custom_keywords.split(',') if k.strip()]
 
@@ -86,7 +80,14 @@ if st.button("Leads generieren"):
         st.markdown("### Generierte Leads")
         st.dataframe(df, use_container_width=True)
     else:
-        st.warning("Keine relevanten Leads gefunden. Versuche, Regionen zu deaktivieren oder Keywords zu reduzieren. Teste eine Query manuell: https://newsapi.org/v2/everything?q=factory+relocation&apiKey=DEIN_KEY")
+        # Fallback: Versuche ohne Regionen
+        st.warning("Keine Leads mit Regionen gefunden. Versuche Fallback ohne Regionen...")
+        fallback_df = fetch_news_in_batches(all_keywords, [])
+        if not fallback_df.empty:
+            st.markdown("### Fallback-Leads (ohne Regionsfilter)")
+            st.dataframe(fallback_df, use_container_width=True)
+        else:
+            st.error("Immer noch keine Leads. Teste manuell: https://newsapi.org/v2/everything?q=factory+relocation&apiKey=DEIN_KEY")
 
 # Export-Option
 if 'df' in locals() and not df.empty:
