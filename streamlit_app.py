@@ -5,7 +5,7 @@ import requests
 st.title("Lead-Generierungs-Dashboard für Industriemontagen")
 
 # Ersetze mit deinem NewsAPI-Key (kostenlos bei newsapi.org holen)
-API_KEY = "dein_newsapi_key_hier_einfuegen"
+API_KEY = "721edb11114a40119016623e7236156d"
 
 # Standard-Keywords und Regionen (Europa/Asien, Deutsch/Englisch)
 default_keywords = ["Fabrikverlagerung", "factory relocation", "Fabrikerweiterung", "plant expansion", "Maschinenabbau", "machine dismantling"]
