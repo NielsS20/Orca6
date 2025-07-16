@@ -5,7 +5,7 @@ import requests
 st.title("Lead-Generierungs-Dashboard für Industriemontagen")
 
 # Ersetze mit deinem NewsAPI-Key
-API_KEY = "721edb11114a40119016623e7236156d"  # Dein Key hier eingefügt
+API_KEY = "721edb11114a40119016623e7236156d"
 
 # Optimisiertes Set an Keywords (fokussiert auf trefferträchtige Begriffe)
 default_keywords = [
@@ -18,7 +18,7 @@ default_keywords = [
 regions = ["Europa", "Asien"]
 
 # Funktion zum Aufteilen der Keywords in Batches und Mergen der Ergebnisse
-def fetch_news_in_batches(query_keywords, selected_regions, batch_size=1):  # 1 pro Batch für einfache Queries
+def fetch_news_in_batches(query_keywords, selected_regions, batch_size=1):
     if not API_KEY or API_KEY == "dein_newsapi_key_hier_einfuegen":
         st.error("Bitte einen gültigen NewsAPI-Key in app.py einfügen!")
         return pd.DataFrame()
@@ -31,11 +31,12 @@ def fetch_news_in_batches(query_keywords, selected_regions, batch_size=1):  # 1 
         batch_keywords = query_keywords[i:i + batch_size]
         if not batch_keywords:
             continue
-        query = f"({' OR '.join(batch_keywords)})"
-        
-        if len(query) > 500:
-            st.warning(f"Batch-Query zu lang ({len(query)} Zeichen) – überspringe Batch.")
-            continue
+        # Für einzelne Keyword: Wenn Leerzeichen, wrap in Quotes für exakte Phrase
+        keyword = batch_keywords[0]
+        if ' ' in keyword:
+            query = f"\"{keyword}\""
+        else:
+            query = keyword
         
         url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
         response = requests.get(url)
