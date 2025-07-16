@@ -26,34 +26,51 @@ default_keywords = [
 # Regionen (fest: Europa/Asien)
 regions = ["Europa", "Asien"]
 
-def fetch_news(query_keywords, selected_regions):
+# Funktion zum Aufteilen der Keywords in Batches und Mergen der Ergebnisse
+def fetch_news_in_batches(query_keywords, selected_regions, batch_size=10):
     if not API_KEY or API_KEY == "dein_newsapi_key_hier_einfuegen":
         st.error("Bitte einen gültigen NewsAPI-Key in app.py einfügen!")
         return pd.DataFrame()
     
-    # Query mit Keywords und Regionen kombinieren
-    query = f"({' OR '.join(query_keywords)}) AND ({' OR '.join(selected_regions)})"
-    url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
-    response = requests.get(url)
-    if response.status_code != 200:
-        st.error(f"API-Fehler: {response.text}")
-        return pd.DataFrame()
+    all_leads = []
+    region_query = f"({' OR '.join(selected_regions)})"
     
-    articles = response.json().get('articles', [])
-    leads = []
-    for article in articles:
-        content = (article.get('title', '') + ' ' + article.get('description', '')).lower()
-        matching_regions = [r for r in selected_regions if r.lower() in content]
-        if matching_regions:
-            leads.append({
-                'Region': ', '.join(matching_regions) or 'Unbekannt',
-                'Company': article['source']['name'],
-                'Event': article['title'],
-                'Source': article['url'],
-                'Language': 'Deutsch' if 'de' in article.get('language', 'en') else 'English',
-                'Potential Contacts': 'Simuliert: Operations Manager (linkedin.com/in/beispiel); Procurement Director (linkedin.com/in/beispiel2) - Integriere LinkedIn API für echte Kontakte.'
-            })
-    return pd.DataFrame(leads)
+    # Keywords in Batches aufteilen
+    for i in range(0, len(query_keywords), batch_size):
+        batch_keywords = query_keywords[i:i + batch_size]
+        if not batch_keywords:
+            continue
+        keyword_query = f"({' OR '.join(batch_keywords)})"
+        query = f"{keyword_query} AND {region_query}"
+        
+        # Überprüfe Query-Länge (sicherheitshalber)
+        if len(query) > 500:
+            st.warning(f"Batch-Query ist immer noch zu lang ({len(query)} Zeichen). Reduziere Keywords.")
+            continue
+        
+        url = f"https://newsapi.org/v2/everything?q={query}&language=de,en&apiKey={API_KEY}&sortBy=publishedAt&pageSize=20"
+        response = requests.get(url)
+        if response.status_code != 200:
+            st.error(f"API-Fehler in Batch: {response.text}")
+            continue
+        
+        articles = response.json().get('articles', [])
+        for article in articles:
+            content = (article.get('title', '') + ' ' + article.get('description', '')).lower()
+            matching_regions = [r for r in selected_regions if r.lower() in content]
+            if matching_regions:
+                all_leads.append({
+                    'Region': ', '.join(matching_regions) or 'Unbekannt',
+                    'Company': article['source']['name'],
+                    'Event': article['title'],
+                    'Source': article['url'],
+                    'Language': 'Deutsch' if 'de' in article.get('language', 'en') else 'English',
+                    'Potential Contacts': 'Simuliert: Operations Manager (linkedin.com/in/beispiel); Procurement Director (linkedin.com/in/beispiel2) - Integriere LinkedIn API für echte Kontakte.'
+                })
+    
+    # Duplikate entfernen (basierend auf Source-URL)
+    df = pd.DataFrame(all_leads).drop_duplicates(subset=['Source'])
+    return df
 
 # User-Inputs
 selected_regions = st.multiselect("Regionen wählen", regions, default=regions)
@@ -61,7 +78,7 @@ custom_keywords = st.text_input("Zusätzliche Keywords (kommagetrennt hinzufüge
 all_keywords = default_keywords + [k.strip() for k in custom_keywords.split(',') if k.strip()]
 
 if st.button("Leads generieren"):
-    df = fetch_news(all_keywords, selected_regions)
+    df = fetch_news_in_batches(all_keywords, selected_regions)
     if not df.empty:
         st.markdown("### Generierte Leads")
         st.dataframe(df, use_container_width=True)
